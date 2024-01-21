@@ -1,16 +1,33 @@
 import tkinter as tk
 from tkinter import filedialog
-from PIL import Image, ImageTk
+import  cv2
 import numpy as np
+
 import random
 
-# Your existing functions here: add_grain, apply_vignette
+def add_grain(image, intensity=5):
+    """ Add grain effect to the image """
+    height, width, _ = image.shape
+    noise = np.random.randint(-intensity, intensity, (height, width, 3), dtype=np.int32)
+    noisy_image = np.clip(image + noise, 0, 255).astype(np.uint8)
+    return noisy_image
+
+def apply_vignette(image, intensity=0.75):
+    """ Apply a vignette effect to the image """
+    height, width, _ = image.shape
+    mask = np.zeros((height, width), dtype=np.uint8)
+    y, x = np.ogrid[0:height, 0:width]
+    mask = np.sqrt((x - width / 2) ** 2 + (y - height / 2) ** 2)
+    mask = (1 - intensity * mask / max(width, height))
+    mask = np.clip(mask, 0, 1)
+    result = (image * mask[:, :, np.newaxis]).astype(np.uint8)
+    return result
 
 def transform_image(image, desaturation, grain_intensity, vignette_intensity):
     """Apply transformations to the image."""
     # Desaturation
-    grayscale = image.convert("L").convert("RGB")
-    img = Image.blend(image, grayscale, alpha=desaturation)
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    img = cv2.addWeighted(image, 1 - desaturation, cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR), desaturation, 0)
 
     # Add grain
     img = add_grain(img, intensity=grain_intensity)
@@ -26,8 +43,8 @@ def update_image():
     grain_intensity = grain_scale.get()
     vignette_intensity = vignette_scale.get() / 100
 
-    transformed_img = transform_image(original_img, desaturation, grain_intensity, vignette_intensity)
-    tk_img = ImageTk.PhotoImage(transformed_img)
+    transformed_img = transform_image(original_img.copy(), desaturation, grain_intensity, vignette_intensity)
+    tk_img = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(transformed_img, cv2.COLOR_BGR2RGB)))
     image_label.config(image=tk_img)
     image_label.image = tk_img  # Keep a reference
 
@@ -36,8 +53,8 @@ def open_image():
     global original_img
     file_path = filedialog.askopenfilename()
     if file_path:
-        original_img = Image.open(file_path)
-        original_img.thumbnail((500, 500))  # Resize for display
+        original_img = cv2.imread(file_path)
+        original_img = cv2.resize(original_img, (500, 500))  # Resize for display
         update_image()
 
 # Create the main window
